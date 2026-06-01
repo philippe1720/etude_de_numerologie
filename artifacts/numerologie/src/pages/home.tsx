@@ -7,6 +7,7 @@ import { setTheme } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 const formSchema = z.object({
@@ -15,8 +16,16 @@ const formSchema = z.object({
   dateNaissance: z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/, "Format attendu: JJ/MM/AAAA"),
 });
 
+function formatDateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
 export default function Home() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -34,9 +43,12 @@ export default function Home() {
         setTheme(data);
         setLocation("/dashboard");
       },
-      onError: (error) => {
-        console.error(error);
-        // Could add a toast here
+      onError: () => {
+        toast({
+          variant: "destructive",
+          title: "Erreur de calcul",
+          description: "Le serveur est temporairement indisponible. Veuillez réessayer dans quelques instants.",
+        });
       }
     });
   }
@@ -100,8 +112,11 @@ export default function Home() {
                     <FormLabel className="text-sm font-medium tracking-wide uppercase text-muted-foreground">Date de naissance</FormLabel>
                     <FormControl>
                       <Input 
-                        placeholder="JJ/MM/AAAA" 
-                        {...field} 
+                        placeholder="JJ/MM/AAAA"
+                        inputMode="numeric"
+                        maxLength={10}
+                        {...field}
+                        onChange={(e) => field.onChange(formatDateInput(e.target.value))}
                         className="bg-background/50 border-input h-12 text-lg font-serif transition-colors focus:bg-background"
                       />
                     </FormControl>

@@ -51,6 +51,10 @@ export function StreamingInterpretation({ theme, onContentReady }: Props) {
                 if (data.content) {
                   accumulated += data.content;
                   setContent(accumulated);
+                } else if (data.error) {
+                  setError(data.error);
+                  done = true;
+                  break;
                 }
               } catch {
                 // Ignore partial chunk parse errors
