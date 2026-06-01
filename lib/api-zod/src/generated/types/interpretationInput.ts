@@ -5,7 +5,8 @@
  * API specification for Numérologie Humaniste
  * OpenAPI spec version: 0.1.0
  */
+import type { ThemeNumerologique } from './themeNumerologique';
 
-export interface HealthStatus {
-  status: string;
+export interface InterpretationInput {
+  theme: ThemeNumerologique;
 }

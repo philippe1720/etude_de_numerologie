@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API specification for Numérologie Humaniste
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: numerologie
+    description: Numerology calculation and AI interpretation
 paths:
   /healthz:
     get:
@@ -24,6 +26,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /numerologie/calcul:
+    post:
+      operationId: calculerTheme
+      tags: [numerologie]
+      summary: Calcule le thème numérologique complet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "200":
+          description: Thème numérologique complet calculé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThemeNumerologique"
+        "400":
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /numerologie/interpretation:
+    post:
+      operationId: genererInterpretation
+      tags: [numerologie]
+      summary: Génère une interprétation jungienne via IA (streaming SSE)
+      description: Retourne un flux Server-Sent Events avec l'interprétation progressive
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterpretationInput"
+      responses:
+        "200":
+          description: Flux SSE de l'interprétation
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Service IA indisponible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +94,153 @@ components:
       required:
         - status
 
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    UserInput:
+      type: object
+      required:
+        - prenoms
+        - nomNaissance
+        - dateNaissance
+      properties:
+        prenoms:
+          type: string
+          description: Tous les prénoms de naissance
+          minLength: 1
+        nomNaissance:
+          type: string
+          description: Nom de famille de naissance (nom de jeune fille)
+          minLength: 1
+        dateNaissance:
+          type: string
+          description: Date de naissance au format JJ/MM/AAAA
+          pattern: '^\d{2}/\d{2}/\d{4}$'
+
+    NombreNumerologique:
+      type: object
+      required:
+        - valeur
+        - estMaitreNombre
+      properties:
+        valeur:
+          type: integer
+          description: La valeur numérique (1-9, ou 11, 22, 33 pour les maîtres nombres)
+        estMaitreNombre:
+          type: boolean
+          description: Vrai si c'est un maître nombre (11, 22, 33)
+        valeurBrute:
+          type: ["integer", "null"]
+          description: La valeur avant réduction théosophique finale
+
+    GrilleInclusion:
+      type: object
+      required:
+        - frequences
+        - nombresManquants
+        - nombresExces
+      properties:
+        frequences:
+          type: object
+          description: Fréquence de chaque nombre de 1 à 9
+          additionalProperties:
+            type: integer
+        nombresManquants:
+          type: array
+          items:
+            type: integer
+          description: Nombres absents (dettes karmiques)
+        nombresExces:
+          type: array
+          items:
+            type: integer
+          description: Nombres en excès
+
+    Apogee:
+      type: object
+      required:
+        - numero
+        - valeur
+        - ageDebut
+        - ageFin
+        - estMaitreNombre
+      properties:
+        numero:
+          type: integer
+          description: Numéro de l'apogée (1 à 4)
+        valeur:
+          type: integer
+        ageDebut:
+          type: integer
+        ageFin:
+          type: ["integer", "null"]
+          description: null si l'apogée est permanent
+        estMaitreNombre:
+          type: boolean
+
+    Defi:
+      type: object
+      required:
+        - type
+        - valeur
+      properties:
+        type:
+          type: string
+          enum: [mineur1, mineur2, majeur]
+        valeur:
+          type: integer
+
+    ThemeNumerologique:
+      type: object
+      required:
+        - prenoms
+        - nomNaissance
+        - dateNaissance
+        - elanSpirituel
+        - moiIntime
+        - nombreExpression
+        - cheminDeVie
+        - anneePersonnelle
+        - apogees
+        - defis
+        - grilleInclusion
+      properties:
+        prenoms:
+          type: string
+        nomNaissance:
+          type: string
+        dateNaissance:
+          type: string
+        elanSpirituel:
+          $ref: "#/components/schemas/NombreNumerologique"
+        moiIntime:
+          $ref: "#/components/schemas/NombreNumerologique"
+        nombreExpression:
+          $ref: "#/components/schemas/NombreNumerologique"
+        cheminDeVie:
+          $ref: "#/components/schemas/NombreNumerologique"
+        anneePersonnelle:
+          $ref: "#/components/schemas/NombreNumerologique"
+        apogees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Apogee"
+        defis:
+          type: array
+          items:
+            $ref: "#/components/schemas/Defi"
+        grilleInclusion:
+          $ref: "#/components/schemas/GrilleInclusion"
+
+    InterpretationInput:
+      type: object
+      required:
+        - theme
+      properties:
+        theme:
+          $ref: "#/components/schemas/ThemeNumerologique"

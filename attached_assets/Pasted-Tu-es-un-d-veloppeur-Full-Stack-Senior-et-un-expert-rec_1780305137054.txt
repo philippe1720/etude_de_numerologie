@@ -1,0 +1,45 @@
+Tu es un développeur Full-Stack Senior et un expert reconnu en Numérologie Humaniste (spécialisé dans la psychologie analytique de Carl Jung et la spiritualité). 
+
+Ton objectif est de créer une application web complète, stable et modulaire qui calcule un thème numérologique complet à partir de l'état civil d'un utilisateur, puis utilise une API LLM pour générer une interprétation dynamique, croisée et profonde de ces résultats.
+
+### 1. Stack Technique et Stabilité
+* Frontend : React avec TypeScript (strict mode activé pour garantir une stabilité totale des données).
+* Backend : Un serveur Node.js/Express (ou des API Routes si tu utilises Next.js) pour sécuriser l'appel à l'API du LLM (OpenAI, Anthropic ou autre) et cacher la clé API.
+* Styling : Tailwind CSS pour une interface épurée, moderne et propice à l'introspection.
+
+### 2. Entrées Utilisateur (Inputs)
+Un formulaire demandant :
+* Prénom(s) (tous les prénoms de naissance).
+* Nom de famille (nom de jeune fille/naissance).
+* Date de naissance (JJ/MM/AAAA).
+
+### 3. Logique de Calcul (Le Moteur Numérologique)
+Crée des fonctions TypeScript robustes pour effectuer la réduction théosophique (réduction de 1 à 9, en conservant les Maîtres Nombres 11, 22 et 33) et calculer les éléments suivants :
+* Identité :
+  - Élan Spirituel (somme des voyelles).
+  - Moi Intime (somme des consonnes).
+  - Nombre d'Expression (somme de toutes les lettres).
+  - Chemin de Vie (réduction de la date de naissance).
+* Cycles Temporels :
+  - Année Personnelle (Jour de naissance + Mois de naissance + Année universelle en cours).
+  - Les 4 Apogées.
+  - Les Défis (mineurs et majeur).
+* Karma (Grille d'Inclusion) :
+  - Fréquence des nombres de 1 à 9.
+  - Identification précise des dettes karmiques (nombres manquants).
+
+### 4. Intégration de l'IA et Interprétations (Jungiennes)
+L'application ne doit PAS utiliser de textes statiques. Une fois les calculs effectués, le backend doit envoyer un prompt structuré au LLM pour générer l'analyse. 
+Tu dois configurer la logique d'appel API et rédiger le "System Prompt" interne de l'application avec ces directives strictes pour le LLM :
+* "Agis comme un psychanalyste jungien et numérologue humaniste."
+* "Analyse les nombres fournis en abordant systématiquement : l'Ombre et la Lumière du nombre, le processus d'individuation de la personne, et les archétypes associés."
+* "Croise les données : explique comment l'Élan Spirituel interagit avec le Nombre d'Expression."
+* "Pour l'Année Personnelle : donne le climat psychologique de l'année en cours et les défis évolutifs."
+* "Pour le Karma : analyse les peurs inconscientes liées aux nombres manquants et propose des actes de résolution concrets pour cette incarnation."
+
+### 5. Interface Utilisateur (UI/UX)
+* Un Dashboard affichant d'abord un résumé clair des calculs (sous forme de cartes ou "Cards").
+* L'affichage de la Grille d'Inclusion avec la mise en évidence visuelle des manques et des excès.
+* Une zone de texte élégante (style rapport d'analyse ou parchemin moderne) où s'affiche progressivement (effet streaming ou chargement) le texte généré par l'IA.
+
+Génère le code étape par étape. Commence par l'architecture globale et les fonctions de calcul mathématiques. Une fois que la logique de calcul est infaillible et testée, passe à la création de la route API pour le LLM, puis termine par l'interface.

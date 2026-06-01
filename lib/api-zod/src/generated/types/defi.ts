@@ -5,7 +5,9 @@
  * API specification for Numérologie Humaniste
  * OpenAPI spec version: 0.1.0
  */
+import type { DefiType } from './defiType';
 
-export interface HealthStatus {
-  status: string;
+export interface Defi {
+  type: DefiType;
+  valeur: number;
 }

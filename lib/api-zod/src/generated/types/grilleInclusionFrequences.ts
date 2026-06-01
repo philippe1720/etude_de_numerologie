@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-}
+/**
+ * Fréquence de chaque nombre de 1 à 9
+ */
+export type GrilleInclusionFrequences = {[key: string]: number};
