@@ -118,32 +118,50 @@ router.post("/numerologie/interpretation", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
+  const MODELS_FALLBACK = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"];
+
+  async function tryGenerateStream(modelName: string) {
+    const genAI = new GoogleGenerativeAI(apiKey!);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-pro",
+      model: modelName,
       systemInstruction: SYSTEM_PROMPT,
     });
-
     const prompt = construirePrompt(theme);
-
-    const result = await model.generateContentStream(prompt);
-
-    for await (const chunk of result.stream) {
-      const text = chunk.text();
-      if (text) {
-        res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
-      }
-    }
-
-    res.write("data: [DONE]\n\n");
-    res.end();
-    req.log.info({ prenoms: theme.prenoms }, "Interprétation générée avec succès");
-  } catch (err) {
-    req.log.error({ err }, "Erreur génération IA");
-    res.write(`data: ${JSON.stringify({ error: "Erreur lors de la génération de l'interprétation" })}\n\n`);
-    res.end();
+    return model.generateContentStream(prompt);
   }
+
+  let lastErr: unknown;
+  for (const modelName of MODELS_FALLBACK) {
+    try {
+      req.log.info({ modelName }, "Tentative génération IA");
+      const result = await tryGenerateStream(modelName);
+
+      for await (const chunk of result.stream) {
+        const text = chunk.text();
+        if (text) {
+          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+        }
+      }
+
+      res.write("data: [DONE]\n\n");
+      res.end();
+      req.log.info({ prenoms: theme.prenoms, modelName }, "Interprétation générée avec succès");
+      return;
+    } catch (err: unknown) {
+      lastErr = err;
+      const status = (err as { status?: number }).status;
+      if (status === 503 || status === 429) {
+        req.log.warn({ err, modelName }, "Modèle surchargé, tentative sur le suivant");
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      break;
+    }
+  }
+
+  req.log.error({ err: lastErr }, "Erreur génération IA — tous les modèles échoués");
+  res.write(`data: ${JSON.stringify({ error: "Erreur lors de la génération de l'interprétation" })}\n\n`);
+  res.end();
 });
 
 export default router;
