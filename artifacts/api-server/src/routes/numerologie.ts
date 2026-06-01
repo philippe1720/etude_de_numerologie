@@ -118,7 +118,14 @@ router.post("/numerologie/interpretation", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
 
-  const MODELS_FALLBACK = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"];
+  // Models tried in order — no wait between them, fail fast and move on
+  const MODELS_FALLBACK = [
+    "gemini-2.5-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+  ];
 
   async function tryGenerateStream(modelName: string) {
     const genAI = new GoogleGenerativeAI(apiKey!);
@@ -130,19 +137,25 @@ router.post("/numerologie/interpretation", async (req, res) => {
     return model.generateContentStream(prompt);
   }
 
-  // Stop writing if client disconnected
+  // Track client disconnect but never skip model attempts because of it
   let clientGone = false;
   req.on("close", () => { clientGone = true; });
 
   function safeWrite(payload: string): boolean {
-    if (clientGone || res.writableEnded) return false;
+    if (res.writableEnded) return false;
+    if (clientGone) return false;
     try { res.write(payload); } catch { clientGone = true; return false; }
     return true;
   }
 
+  // Keepalive: send SSE comment every 5 s so the browser doesn't time out the connection
+  const keepaliveTimer = setInterval(() => {
+    safeWrite(": keepalive\n\n");
+  }, 5000);
+  const cleanup = () => clearInterval(keepaliveTimer);
+
   let lastErr: unknown;
   for (const modelName of MODELS_FALLBACK) {
-    if (clientGone) break;
     try {
       req.log.info({ modelName }, "Tentative génération IA");
       const result = await tryGenerateStream(modelName);
@@ -150,42 +163,35 @@ router.post("/numerologie/interpretation", async (req, res) => {
       let streamOk = true;
       try {
         for await (const chunk of result.stream) {
-          if (clientGone) { streamOk = false; break; }
           const text = chunk.text();
           if (text) safeWrite(`data: ${JSON.stringify({ content: text })}\n\n`);
         }
       } catch (streamErr: unknown) {
-        // Mid-stream parse error — treat as retriable
         lastErr = streamErr;
         req.log.warn({ err: streamErr, modelName }, "Erreur mid-stream, tentative sur le modèle suivant");
         streamOk = false;
       }
 
       if (streamOk) {
+        cleanup();
         safeWrite("data: [DONE]\n\n");
         if (!res.writableEnded) res.end();
         req.log.info({ prenoms: theme.prenoms, modelName }, "Interprétation générée avec succès");
         return;
       }
-      // Try next model
-      await new Promise((r) => setTimeout(r, 1000));
       continue;
     } catch (err: unknown) {
       lastErr = err;
       const status = (err as { status?: number }).status;
-      if (status === 503 || status === 429) {
-        req.log.warn({ err, modelName }, "Modèle surchargé, tentative sur le suivant");
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      // Unknown error — try next model anyway
-      req.log.warn({ err, modelName }, "Erreur inconnue, tentative sur le modèle suivant");
-      await new Promise((r) => setTimeout(r, 1000));
+      const msg = `[${status ?? "?"}] ${(err as Error).message?.slice(0, 80)}`;
+      req.log.warn({ modelName, status, msg }, "Modèle indisponible, tentative suivante");
+      // No artificial delay — move to next model immediately
     }
   }
 
+  cleanup();
   req.log.error({ err: lastErr }, "Erreur génération IA — tous les modèles échoués");
-  safeWrite(`data: ${JSON.stringify({ error: "Erreur lors de la génération de l'interprétation" })}\n\n`);
+  safeWrite(`data: ${JSON.stringify({ error: "Tous les modèles IA sont temporairement indisponibles. Réessayez dans quelques instants." })}\n\n`);
   if (!res.writableEnded) res.end();
 });
 
