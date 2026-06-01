@@ -1,6 +1,14 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 
+// Prevent any unhandled async rejection from crashing the server
+process.on("unhandledRejection", (reason) => {
+  logger.error({ err: reason }, "Unhandled promise rejection — ignored to keep server alive");
+});
+process.on("uncaughtException", (err) => {
+  logger.error({ err }, "Uncaught exception — ignored to keep server alive");
+});
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {

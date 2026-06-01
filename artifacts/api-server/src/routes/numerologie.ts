@@ -130,23 +130,46 @@ router.post("/numerologie/interpretation", async (req, res) => {
     return model.generateContentStream(prompt);
   }
 
+  // Stop writing if client disconnected
+  let clientGone = false;
+  req.on("close", () => { clientGone = true; });
+
+  function safeWrite(payload: string): boolean {
+    if (clientGone || res.writableEnded) return false;
+    try { res.write(payload); } catch { clientGone = true; return false; }
+    return true;
+  }
+
   let lastErr: unknown;
   for (const modelName of MODELS_FALLBACK) {
+    if (clientGone) break;
     try {
       req.log.info({ modelName }, "Tentative génération IA");
       const result = await tryGenerateStream(modelName);
 
-      for await (const chunk of result.stream) {
-        const text = chunk.text();
-        if (text) {
-          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+      let streamOk = true;
+      try {
+        for await (const chunk of result.stream) {
+          if (clientGone) { streamOk = false; break; }
+          const text = chunk.text();
+          if (text) safeWrite(`data: ${JSON.stringify({ content: text })}\n\n`);
         }
+      } catch (streamErr: unknown) {
+        // Mid-stream parse error — treat as retriable
+        lastErr = streamErr;
+        req.log.warn({ err: streamErr, modelName }, "Erreur mid-stream, tentative sur le modèle suivant");
+        streamOk = false;
       }
 
-      res.write("data: [DONE]\n\n");
-      res.end();
-      req.log.info({ prenoms: theme.prenoms, modelName }, "Interprétation générée avec succès");
-      return;
+      if (streamOk) {
+        safeWrite("data: [DONE]\n\n");
+        if (!res.writableEnded) res.end();
+        req.log.info({ prenoms: theme.prenoms, modelName }, "Interprétation générée avec succès");
+        return;
+      }
+      // Try next model
+      await new Promise((r) => setTimeout(r, 1000));
+      continue;
     } catch (err: unknown) {
       lastErr = err;
       const status = (err as { status?: number }).status;
@@ -155,13 +178,15 @@ router.post("/numerologie/interpretation", async (req, res) => {
         await new Promise((r) => setTimeout(r, 1000));
         continue;
       }
-      break;
+      // Unknown error — try next model anyway
+      req.log.warn({ err, modelName }, "Erreur inconnue, tentative sur le modèle suivant");
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
 
   req.log.error({ err: lastErr }, "Erreur génération IA — tous les modèles échoués");
-  res.write(`data: ${JSON.stringify({ error: "Erreur lors de la génération de l'interprétation" })}\n\n`);
-  res.end();
+  safeWrite(`data: ${JSON.stringify({ error: "Erreur lors de la génération de l'interprétation" })}\n\n`);
+  if (!res.writableEnded) res.end();
 });
 
 export default router;
