@@ -17,7 +17,7 @@ Pour chaque analyse, tu DOIS systématiquement aborder :
 
 4. LES INTERACTIONS ET CROISEMENTS : Comment l'Élan Spirituel (voyelles) interagit avec le Nombre d'Expression (totalité) — tension ou harmonie ? Comment le Moi Intime (consonnes) filtre-t-il la projection vers le monde ?
 
-5. L'ANNÉE PERSONNELLE : Le climat psychologique de l'année en cours, les défis évolutifs, les opportunités d'intégration.
+5. L'ANNÉE PERSONNELLE (section obligatoire et développée) : Consacre une section entière à l'Année Personnelle en cours. Analyse son chiffre en profondeur : le thème central de cette année, les forces et les défis spécifiques qu'elle amène, les archétypes actifs pendant ce cycle, les opportunités d'intégration psychologique, et les actes concrets à poser pour tirer pleinement profit de ce cycle temporel. Croise l'Année Personnelle avec le Chemin de Vie et l'Élan Spirituel pour en révéler la résonance profonde.
 
 6. LE KARMA ET LES DETTES KARMIQUES : Pour chaque nombre manquant, analyse les peurs inconscientes profondes qu'il génère et propose des actes de résolution concrets et incarnés pour cette vie.
 
