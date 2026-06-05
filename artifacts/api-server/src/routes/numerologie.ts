@@ -116,6 +116,9 @@ router.post("/numerologie/interpretation", async (req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
+  res.setHeader("Transfer-Encoding", "chunked");
+  res.removeHeader("Content-Length");
+  res.flushHeaders();
 
   let clientGone = false;
   req.on("close", () => { clientGone = true; });
