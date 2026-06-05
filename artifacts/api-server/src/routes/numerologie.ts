@@ -1,7 +1,6 @@
 import { Router } from "express";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 import { calculerThemeComplet, type ThemeNumerologique } from "../lib/numerologie";
-import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -97,7 +96,7 @@ router.post("/numerologie/calcul", (req, res) => {
   }
 });
 
-// POST /api/numerologie/interpretation — SSE streaming
+// POST /api/numerologie/interpretation — SSE streaming via OpenAI
 router.post("/numerologie/interpretation", async (req, res) => {
   const { theme } = req.body as { theme: ThemeNumerologique };
 
@@ -106,9 +105,9 @@ router.post("/numerologie/interpretation", async (req, res) => {
     return;
   }
 
-  const apiKey = process.env.GOOGLE_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    req.log.error("GOOGLE_API_KEY manquant");
+    req.log.error("OPENAI_API_KEY manquant");
     res.status(503).json({ error: "Service IA non configuré" });
     return;
   }
@@ -118,81 +117,52 @@ router.post("/numerologie/interpretation", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
 
-  // Models tried in order — no wait between them, fail fast and move on
-  const MODELS_FALLBACK = [
-    "gemini-2.5-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-  ];
-
-  async function tryGenerateStream(modelName: string) {
-    const genAI = new GoogleGenerativeAI(apiKey!);
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction: SYSTEM_PROMPT,
-    });
-    const prompt = construirePrompt(theme);
-    return model.generateContentStream(prompt);
-  }
-
-  // Track client disconnect but never skip model attempts because of it
   let clientGone = false;
   req.on("close", () => { clientGone = true; });
 
   function safeWrite(payload: string): boolean {
-    if (res.writableEnded) return false;
-    if (clientGone) return false;
+    if (res.writableEnded || clientGone) return false;
     try { res.write(payload); } catch { clientGone = true; return false; }
     return true;
   }
 
-  // Keepalive: send SSE comment every 5 s so the browser doesn't time out the connection
-  const keepaliveTimer = setInterval(() => {
-    safeWrite(": keepalive\n\n");
-  }, 5000);
+  // Keepalive toutes les 5s pour éviter que le navigateur coupe la connexion
+  const keepaliveTimer = setInterval(() => { safeWrite(": keepalive\n\n"); }, 5000);
   const cleanup = () => clearInterval(keepaliveTimer);
 
-  let lastErr: unknown;
-  for (const modelName of MODELS_FALLBACK) {
-    try {
-      req.log.info({ modelName }, "Tentative génération IA");
-      const result = await tryGenerateStream(modelName);
+  try {
+    const openai = new OpenAI({ apiKey });
+    const prompt = construirePrompt(theme);
 
-      let streamOk = true;
-      try {
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) safeWrite(`data: ${JSON.stringify({ content: text })}\n\n`);
-        }
-      } catch (streamErr: unknown) {
-        lastErr = streamErr;
-        req.log.warn({ err: streamErr, modelName }, "Erreur mid-stream, tentative sur le modèle suivant");
-        streamOk = false;
-      }
+    req.log.info({ prenoms: theme.prenoms }, "Génération interprétation OpenAI");
 
-      if (streamOk) {
-        cleanup();
-        safeWrite("data: [DONE]\n\n");
-        if (!res.writableEnded) res.end();
-        req.log.info({ prenoms: theme.prenoms, modelName }, "Interprétation générée avec succès");
-        return;
+    const stream = await openai.chat.completions.create({
+      model: "gpt-4o",
+      max_completion_tokens: 4096,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        safeWrite(`data: ${JSON.stringify({ content })}\n\n`);
       }
-      continue;
-    } catch (err: unknown) {
-      lastErr = err;
-      const status = (err as { status?: number }).status;
-      const msg = `[${status ?? "?"}] ${(err as Error).message?.slice(0, 80)}`;
-      req.log.warn({ modelName, status, msg }, "Modèle indisponible, tentative suivante");
-      // No artificial delay — move to next model immediately
     }
-  }
 
-  cleanup();
-  req.log.error({ err: lastErr }, "Erreur génération IA — tous les modèles échoués");
-  safeWrite(`data: ${JSON.stringify({ error: "Tous les modèles IA sont temporairement indisponibles. Réessayez dans quelques instants." })}\n\n`);
-  if (!res.writableEnded) res.end();
+    cleanup();
+    safeWrite("data: [DONE]\n\n");
+    if (!res.writableEnded) res.end();
+    req.log.info({ prenoms: theme.prenoms }, "Interprétation OpenAI générée avec succès");
+  } catch (err: unknown) {
+    cleanup();
+    req.log.error({ err }, "Erreur génération OpenAI");
+    safeWrite(`data: ${JSON.stringify({ error: "Erreur lors de la génération. Vérifiez votre clé API OpenAI." })}\n\n`);
+    if (!res.writableEnded) res.end();
+  }
 });
 
 export default router;
