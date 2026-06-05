@@ -96,7 +96,7 @@ router.post("/numerologie/calcul", (req, res) => {
   }
 });
 
-// POST /api/numerologie/interpretation — SSE streaming via OpenAI
+// POST /api/numerologie/interpretation — JSON response (proxy-compatible)
 router.post("/numerologie/interpretation", async (req, res) => {
   const { theme } = req.body as { theme: ThemeNumerologique };
 
@@ -112,59 +112,28 @@ router.post("/numerologie/interpretation", async (req, res) => {
     return;
   }
 
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.setHeader("Transfer-Encoding", "chunked");
-  res.removeHeader("Content-Length");
-  res.flushHeaders();
-
-  let clientGone = false;
-  req.on("close", () => { clientGone = true; });
-
-  function safeWrite(payload: string): boolean {
-    if (res.writableEnded || clientGone) return false;
-    try { res.write(payload); } catch { clientGone = true; return false; }
-    return true;
-  }
-
-  // Keepalive toutes les 5s pour éviter que le navigateur coupe la connexion
-  const keepaliveTimer = setInterval(() => { safeWrite(": keepalive\n\n"); }, 5000);
-  const cleanup = () => clearInterval(keepaliveTimer);
-
   try {
     const openai = new OpenAI({ apiKey });
     const prompt = construirePrompt(theme);
 
     req.log.info({ prenoms: theme.prenoms }, "Génération interprétation OpenAI");
 
-    const stream = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       max_completion_tokens: 4096,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ],
-      stream: true,
+      stream: false,
     });
 
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content;
-      if (content) {
-        safeWrite(`data: ${JSON.stringify({ content })}\n\n`);
-      }
-    }
-
-    cleanup();
-    safeWrite("data: [DONE]\n\n");
-    if (!res.writableEnded) res.end();
+    const content = completion.choices[0]?.message?.content ?? "";
     req.log.info({ prenoms: theme.prenoms }, "Interprétation OpenAI générée avec succès");
+    res.json({ content });
   } catch (err: unknown) {
-    cleanup();
     req.log.error({ err }, "Erreur génération OpenAI");
-    safeWrite(`data: ${JSON.stringify({ error: "Erreur lors de la génération. Vérifiez votre clé API OpenAI." })}\n\n`);
-    if (!res.writableEnded) res.end();
+    res.status(500).json({ error: "Erreur lors de la génération. Vérifiez votre clé API OpenAI." });
   }
 });
 
